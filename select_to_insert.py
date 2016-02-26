@@ -4,30 +4,20 @@
 import cx_Oracle
 import re
 
+def get_table(query):
+	"""Takes a SQL query as input and return the corresponding table name"""
+	table_name = re.match(r'(.*) from (\w+).*', query, re.M|re.I)
+	
+	print "The table name is : \t", table_name.group(2)
+	return table_name.group(2)
+	
+def get_column(cur):
+	"""Input : cursor
+	   Output : Columns names and ther data types in a tuple
+	   Functioning :Reads the name and data type of the columns used in the select query from the describe attribute of the cursor"""
+	return [ (i[0], i[1]) for i in cur.description ]
+	
 
-def list_of_dict_form_of_rows(cur):
-	"""create a list of dictionary such that 
-		each item of the list is a dictionary of the form { "col1_name" : col1_data }
-		each item of the list is actually a row of the table only thing that each cell comes in a col name value pair"""
-		
-	#get all the column names of the table in a list
-	#the first element of the description attribute of the cursor is the column name
-	
-	column = [i[0] for i in cur.description ]
-	
-	list_of_dict_form_of_rows = []
-	
-	for each_row in cur:
-		row_dict = dict()
-				
-		for each_col in column:
-			row_dict[each_col] = each_row[column.index(each_col)]
-			
-		list_of_dict_form_of_rows.append(row_dict)
-		
-	return list_of_dict_form_of_rows
-
-	
 def select_to_insert(list_of_dict_form_of_rows, table):
 	"""The function takes list_of_dict_form_of_rows as input and generates the insert query by reading the 
 	corresponding column name and column value pair"""
@@ -59,33 +49,40 @@ def select_to_insert(list_of_dict_form_of_rows, table):
 	
 	return insert_query
 	
-##################################################################################################################
+##############################################################################
 #
 #								MAIN
 #
-##################################################################################################################
+##############################################################################
 
 def main():
+	#Get the select query from the user
 	query = raw_input("Enter the select query:\t")
-	table_name = re.match(r'(.*) from (\w+).*', query, re.M|re.I)
-
-	print "The table name is : \t", table_name.group(2)
-
+	
+	#get the table name from the query
+	table = get_table(query)
+	
 	con=cx_Oracle.connect("KOTDB20/KOTDB20@KOTABP1")
-
+	
 	cur = con.cursor()
-
-	#cur.execute(__sel_from_table,)
+	
 	cur.execute(query)
-
-	result = list_of_dict_form_of_rows(cur)
-
-	table = table_name.group(2)
-
+	
+	#get the names of the columns and their data types
+	#desc_col = describe columns
+	desc_col = get_column(cur)
+	
+	for element in desc_col:
+		print element
+		
+	input("Enter")
+	
+	#generate the insert out of the select query
 	insert_query = select_to_insert(result, table)
-
+	
 	print "Total no of rows fetched = ", cur.rowcount
 	print insert_query
-
+	
 if __name__ == "__main__" :
-	main()
+    main()
+
