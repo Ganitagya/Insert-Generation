@@ -4,7 +4,6 @@
 import cx_Oracle
 import re
 
-#__sel_from_table = """SELECT * FROM """
 
 def list_of_dict_form_of_rows(cur):
 	"""create a list of dictionary such that 
@@ -66,31 +65,27 @@ def select_to_insert(list_of_dict_form_of_rows, table):
 #
 ##################################################################################################################
 
+def main():
+	query = raw_input("Enter the select query:\t")
+	table_name = re.match(r'(.*) from (\w+).*', query, re.M|re.I)
 
+	print "The table name is : \t", table_name.group(2)
 
-#table= raw_input("Enter the table name:\t")
+	con=cx_Oracle.connect("KOTDB20/KOTDB20@KOTABP1")
 
-#__sel_from_table = __sel_from_table + table
+	cur = con.cursor()
 
-query = raw_input("Enter the select query:\t")
+	#cur.execute(__sel_from_table,)
+	cur.execute(query)
 
-table_name = re.match(r'(.*) from (\w+).*', query, re.M|re.I)
+	result = list_of_dict_form_of_rows(cur)
 
-print "The table name is : \t", table_name.group(2)
+	table = table_name.group(2)
 
-con=cx_Oracle.connect("KOTDB20/KOTDB20@KOTABP1")
+	insert_query = select_to_insert(result, table)
 
-cur = con.cursor()
+	print "Total no of rows fetched = ", cur.rowcount
+	print insert_query
 
-#cur.execute(__sel_from_table,)
-cur.execute(query)
-
-result = list_of_dict_form_of_rows(cur)
-
-table = table_name.group(2)
-
-insert_query = select_to_insert(result, table)
-
-print "Total no of rows fetched = ", cur.rowcount
-print insert_query
-
+if __name__ == "__main__" :
+	main()
