@@ -17,37 +17,16 @@ def get_column(cur):
 	   Functioning :Reads the name and data type of the columns used in the select query from the describe attribute of the cursor"""
 	return [ (i[0], i[1]) for i in cur.description ]
 	
-
+def gen_val(col_val):
+	#item for item in col_val if "None" in item
+	for item in col_list if "None" in item:
+		col_list = list(item)
+		
+	
 def select_to_insert(list_of_dict_form_of_rows, table):
 	"""The function takes list_of_dict_form_of_rows as input and generates the insert query by reading the 
 	corresponding column name and column value pair"""
-	i=1
-	value = "("
-	#for element in list_of_dict_form_of_rows:
-	#	print "\n\nROW_NUM: ",i, "\n",element
-	#	i += 1
-		
-		
-	element = list_of_dict_form_of_rows[0]
 	
-	for key in element:
-		if key != element.keys()[-1]:
-			value = value + key + ", "
-		else:
-			value = value + key 
-
-	value = value + ") VALUES ( "
-	
-	for key in element:
-		if key !=element.keys()[-1]:
-			value = value + str(element[key]) + ", "
-		else:
-			value = value + str(element[key]) 
-
-	
-	insert_query = "INSERT INTO " + table + value	+ " );"
-	
-	return insert_query
 	
 ##############################################################################
 #
@@ -62,7 +41,7 @@ def main():
 	#get the table name from the query
 	table = get_table(query)
 	
-	con=cx_Oracle.connect("KOTDB20/KOTDB20@KOTABP1")
+	con=cx_Oracle.connect(connection-string)
 	
 	cur = con.cursor()
 	
@@ -70,19 +49,15 @@ def main():
 	
 	#get the names of the columns and their data types
 	#desc_col = describe columns
+	#desc_col is a list of tuple (column_name, column_type)
 	desc_col = get_column(cur)
 	
-	for element in desc_col:
-		print element
-		
-	input("Enter")
-	
-	#generate the insert out of the select query
-	insert_query = select_to_insert(result, table)
-	
 	print "Total no of rows fetched = ", cur.rowcount
-	print insert_query
+	
+	#col_val is the list of values of each column returned from select query
+	col_val = [row for row in cur]
+	
+	col_val = gen_val(col_val)
 	
 if __name__ == "__main__" :
     main()
-
