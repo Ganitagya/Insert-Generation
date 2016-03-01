@@ -13,14 +13,22 @@ def get_table(query):
 	
 def get_column(cur):
 	"""Input : cursor
-	   Output : Columns names and ther data types in a tuple
+	   Output : Column names and their data types in a tuple
 	   Functioning :Reads the name and data type of the columns used in the select query from the describe attribute of the cursor"""
 	return [ (i[0], i[1]) for i in cur.description ]
 	
 def gen_val(col_val):
 	#item for item in col_val if "None" in item
-	for item in col_list if "None" in item:
-		col_list = list(item)
+	test_list = []
+	for item in col_val:
+		test_list = list(item)
+
+		#if "None" in item:
+		#get all the indices where "None" exists
+		ind = [i for i, val in enumerate(test_list) if val == "None"]
+
+		for i in ind:
+			test_list[i] = "NULL"
 		
 	
 def select_to_insert(list_of_dict_form_of_rows, table):
@@ -57,7 +65,7 @@ def main():
 	#col_val is the list of values of each column returned from select query
 	col_val = [row for row in cur]
 	
-	col_val = gen_val(col_val)
+	values = gen_val(col_val)
 	
 if __name__ == "__main__" :
     main()
