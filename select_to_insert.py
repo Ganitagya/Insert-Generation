@@ -6,6 +6,8 @@ import cx_Oracle
 import re
 from   datetime import datetime
 import time
+import os
+import check_primary
 
 def get_table(query):
 	"""Takes a SQL query as input and return the corresponding table name"""
@@ -21,62 +23,88 @@ def get_column(cur):
 	return [ (i[0], i[1]) for i in cur.description ]
 	
 def gen_val(row):
-	#item for item in row if "None" in item
-
+	#flag is the switch for CLOB data
+	#flag = True implies CLOB data exists in the row
+	flag = False
 	test_list = []
 	test_list = list(row)
 
-	#if "None" in item:
-	#get all the indices where "None" exists
-	ind = [i for i, val in enumerate(test_list) if val == None]
 	
-	#Oracle uses NULL instead of None
-	#and Oracle treats '' as NULL while inserting
-	for i in ind:
-		test_list[i] = ''
-		
-	del ind[:]
+	for i, cell in enumerate(test_list):
+		if cell == None:
+			test_list[i] = "NULL"
 	
-	#if datetime object in item
-	#get all the indices where the object exists
-	ind = [i for i, val in enumerate(test_list) if type(val) is datetime]
+		if type(cell) is datetime:
+			test_list[i] = test_list[i].strftime('%m/%d/%Y %H:%M:%S')
+			test_list[i] = "TO_DATE( '" + str(test_list[i]) + "' , 'MM/DD/YYYY HH24:MI:SS')"
 			
-	#convert into to_date() format of Oracle
+		if type(cell) is str:
+			test_list[i] = "'" +  cell + "'"
+			
+		if type(cell) is cx_Oracle.LOB:
+			#if CLOB data exists then while inserting just insert a string of zero length
+			#create a file CLOB_data where the data is stored
+			#from this file create the update queries
+			test_list[i] = "''"
+			
+			file = open("CLOB_data", "w")
+			file.write(str(cell))
+			#The delimiter to one CLOB data is EOCLOB
+			#EOCLOB = End Of Clob
+			file.write("\n\nEOCLOB\n\n")
+			file.close()
+			flag = True
+			
+	return test_list, flag
 	
-	for i in ind:
-		test_list[i] = time.strftime('%m/%d/%Y %H:%M:%S')
-		test_list[i] = "TO_DATE(" + str(test_list[i]) + ", 'MM/DD/YYYY HH24:MI:SS')"
-		
-	del ind[:]
+def create_statement(cur, table, desc_col, query, connect_string):
+	#p_cols are the primary columns of table
+	p_cols = check_primary.get_primary(connect_string, table)
+
 	
-	return test_list
+	#check if the primary columns have been included in the column description.
+	if check_primary.chk_pk_in(p_cols, desc_col):
+		file = open('insert_statement.sql' , 'w')
+		file.write("--The insert for table:\t" + table + "\n\n")
 		
-def gen_insert(table, desc_col, values):
+		for row in cur:
+			values, flag = gen_val(row)
+			gen_insert(table, desc_col, values, file)
+			
+			if flag:
+				print "LOB data exists"
+				file.write("--The update for table:\t" + table + "\n\n")
+				gen_update(table, desc_col, file)
+		
+		file.close()
+	
+		
+def gen_insert(table, desc_col, values, file):
 	"""Input: The column description and the values to be inserted to each column
 		OutPut: generates the insert query """
 	#for items in values:
-	query = "INSERT INTO " + table + "( "
+	ins_query = "INSERT INTO " + table + "( "
+
+	ins_query += ', '.join(col_name for col_name,col_data_type in desc_col)
 	
-	#for cols in desc_col:
-	#	query += str(cols[0]) + ", " 
-  
-	#new_query=''
-	query += ', '.join(col_name for col_name,col_data_type in desc_col)
-	#print "query_new",query,
-	#We dont want the last two characters ' and a space :)
-	#query = query[:-2]
+	ins_query += ") VALUES ("
 	
-	query += ") VALUES ("
+	ins_query += ', '.join(str(val) for val in values)
 	
-	for i in values:
-		query += str(i) + ", "
+	ins_query += ") ;\n\n\n"
+		
+	file.write(ins_query)
 	
-	#We dont want the last two characters ' and a space :)
-	query = query[:-2]
+def gen_update(table, desc_col, file):
+	"""Input:	table name in table
+				(column_name, column_type) in desc_col
+				file descriptor to out put file 
+		Output:	writes the update queries for CLOB data to the out put file"""
+		
+	#open the file containing the CLOB data
+	print "in gen_update"
+				
 	
-	query += ") ;\n"
-	
-	print query
 
 ##############################################################################
 #
@@ -85,15 +113,16 @@ def gen_insert(table, desc_col, values):
 ##############################################################################
 
 def main():
+	connect_string = os.environ.get("USER") + '/' + os.environ.get("PASS") + '@' + os.environ.get("DB_INST")
+	con = cx_Oracle.connect(connect_string)
+	
+	cur = con.cursor()
+	
 	#Get the select query from the user
 	query = raw_input("Enter the select query:\t")
 	
 	#get the table name from the query
 	table = get_table(query)
-	
-	con=cx_Oracle.connect(connection-string)
-	
-	cur = con.cursor()
 	
 	cur.execute(query)
 	
@@ -101,21 +130,8 @@ def main():
 	#desc_col = describe columns
 	#"""desc_col is a list of tuple (column_name, column_type)"""
 	desc_col = get_column(cur)
-	
-	print "Total no of rows fetched = ", cur.rowcount
-	
-	#col_val is the list of values of each column in form of tuples returned from select query
-	#it is the list of rows
-	col_val = [row for row in cur]
-	
-	ins_query = []
-	
-	for q,row in enumerate(col_val):
-		values = gen_val(row)
-		ins_query.append(gen_insert(table, desc_col, values))
-	
-	for query in ins_query:
-		print ins_query
+
+	create_statement(cur, table.upper(), desc_col, query, connect_string)
 	
 if __name__ == "__main__" :
     main()
