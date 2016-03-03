@@ -1,5 +1,4 @@
 #!/bin/env python
-#Checking the data type of the columns is remaining
 #if the data type matches CLOB then a dufferent functionality has to implemented
 
 import cx_Oracle
@@ -22,7 +21,7 @@ def get_column(cur):
 	   Functioning :Reads the name and data type of the columns used in the select query from the describe attribute of the cursor"""
 	return [ (i[0], i[1]) for i in cur.description ]
 	
-def gen_val(row):
+def gen_val(table, rownum, row):
 	#flag is the switch for CLOB data
 	#flag = True implies CLOB data exists in the row
 	flag = False
@@ -47,11 +46,15 @@ def gen_val(row):
 			#from this file create the update queries
 			test_list[i] = "''"
 			
-			file = open("CLOB_data", "w")
+			#create a separate directory with row number as the directory name for each row 
+			#each such directory will have different files for CLOB data
+			directory = table + "/Row_" + str(rownum)
+			if not os.path.exists(directory):
+				os.makedirs(directory)
+				
+			filename = directory + "/CLOB_col_" + str(i)
+			file = open(filename, "w")
 			file.write(str(cell))
-			#The delimiter to one CLOB data is EOCLOB
-			#EOCLOB = End Of Clob
-			file.write("\n\nEOCLOB\n\n")
 			file.close()
 			flag = True
 			
@@ -64,19 +67,34 @@ def create_statement(cur, table, desc_col, query, connect_string):
 	
 	#check if the primary columns have been included in the column description.
 	if check_primary.chk_pk_in(p_cols, desc_col):
-		file = open('insert_statement.sql' , 'w')
+		#create a directory with table name
+		directory = table
+		if not os.path.exists(directory):
+					os.makedirs(directory)
+		
+		#create the output file
+		filename = directory +"/insert_statement.sql"
+		file = open(filename, 'w')
 		file.write("--The insert for table:\t" + table + "\n\n")
 		
-		for row in cur:
-			values, flag = gen_val(row)
+		for rownum, row in enumerate(cur):
+			values, flag = gen_val(table, rownum, row)
 			gen_insert(table, desc_col, values, file)
 			
-			if flag:
+			#flag is the switch for CLOB data
+			#flag = True implies CLOB data exists in the row
+			if flag:				
 				print "LOB data exists"
 				file.write("--The update for table:\t" + table + "\n\n")
 				gen_update(table, desc_col, file)
 		
 		file.close()
+		
+	else:
+		print "Primary key not provided in the SELECT query"
+		print "Could not generate insert"
+		print "Please full fill all the constraints of the table and execute the SELECT query"
+		exit()
 	
 		
 def gen_insert(table, desc_col, values, file):
