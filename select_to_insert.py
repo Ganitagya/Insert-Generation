@@ -1,4 +1,5 @@
 #!/bin/env python
+#Checking the data type of the columns is remaining
 #if the data type matches CLOB then a dufferent functionality has to implemented
 
 import cx_Oracle
@@ -21,7 +22,7 @@ def get_column(cur):
 	   Functioning :Reads the name and data type of the columns used in the select query from the describe attribute of the cursor"""
 	return [ (i[0], i[1]) for i in cur.description ]
 	
-def gen_val(table, rownum, row):
+def gen_val(table, rownum, row, p_cols, desc_col):
 	#flag is the switch for CLOB data
 	#flag = True implies CLOB data exists in the row
 	flag = False
@@ -56,6 +57,17 @@ def gen_val(table, rownum, row):
 			file = open(filename, "w")
 			file.write(str(cell))
 			file.close()
+			
+			p_col_val = []
+			
+			for j, col in enumerate(p_cols):
+				name = col[0]
+				for k, element in enumerate(desc_col):
+					if element[0] == name:
+						p_col_val.append([name, test_list[k]])
+			
+			
+			gen_update(table, desc_col[i][0], filename, p_col_val)
 			flag = True
 			
 	return test_list, flag
@@ -67,7 +79,10 @@ def create_statement(cur, table, desc_col, query, connect_string):
 	
 	#check if the primary columns have been included in the column description.
 	if check_primary.chk_pk_in(p_cols, desc_col):
-		#create a directory with table name
+		#To get the fresh data 
+		#remove any old data
+		os.system("rm -rf " + table)
+		
 		directory = table
 		if not os.path.exists(directory):
 					os.makedirs(directory)
@@ -78,7 +93,7 @@ def create_statement(cur, table, desc_col, query, connect_string):
 		file.write("--The insert for table:\t" + table + "\n\n")
 		
 		for rownum, row in enumerate(cur):
-			values, flag = gen_val(table, rownum, row)
+			values, flag = gen_val(table, rownum, row, p_cols, desc_col)
 			gen_insert(table, desc_col, values, file)
 			
 			#flag is the switch for CLOB data
@@ -86,7 +101,7 @@ def create_statement(cur, table, desc_col, query, connect_string):
 			if flag:				
 				print "LOB data exists"
 				file.write("--The update for table:\t" + table + "\n\n")
-				gen_update(table, desc_col, file)
+				#gen_update(table, p_cols, file)
 		
 		file.close()
 		
@@ -100,7 +115,6 @@ def create_statement(cur, table, desc_col, query, connect_string):
 def gen_insert(table, desc_col, values, file):
 	"""Input: The column description and the values to be inserted to each column
 		OutPut: generates the insert query """
-	#for items in values:
 	ins_query = "INSERT INTO " + table + "( "
 
 	ins_query += ', '.join(col_name for col_name,col_data_type in desc_col)
@@ -113,15 +127,29 @@ def gen_insert(table, desc_col, values, file):
 		
 	file.write(ins_query)
 	
-def gen_update(table, desc_col, file):
+def gen_update(table, set_col, filename, p_col_val):
 	"""Input:	table name in table
 				(column_name, column_type) in desc_col
 				file descriptor to out put file 
 		Output:	writes the update queries for CLOB data to the out put file"""
 		
 	#open the file containing the CLOB data
+	in_file = open(filename, "r")
+	
+	out_file = open("output", "w")
+	
+	while file:
+		data = in_file.read(4000)
+		update_query = "\n\nUPDATE " + table + " SET " + str(set_col) + " = " + str(set_col)+ " || " + str(data)  + " WHERE "
+		for col in p_col_val:
+			update_query += str(col[0]) + "  = " + str(col[1]) + " and \n"
+		
+		update_query = update_query[:-6]
+		out_file.write(update_query)
 	print "in gen_update"
-				
+	#print update_query
+	out_file.close()
+	in_file.close()
 	
 
 ##############################################################################
@@ -133,7 +161,6 @@ def gen_update(table, desc_col, file):
 def main():
 	connect_string = os.environ.get("USER") + '/' + os.environ.get("PASS") + '@' + os.environ.get("DB_INST")
 	con = cx_Oracle.connect(connect_string)
-	
 	cur = con.cursor()
 	
 	#Get the select query from the user
